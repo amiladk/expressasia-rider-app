@@ -50,5 +50,21 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+
+	<!-- Location Permissions -->
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Express Rider needs access to your location to track delivery routes</string>
+    
+    <key>NSLocationAlwaysUsageDescription</key>
+    <string>Express Rider needs access to your location even when the app is in the background to track delivery routes</string>
+    
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>Express Rider needs access to your location to track delivery routes during deliveries</string>
+    
+    <!-- Background Modes -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>location</string>
+    </array>
 </dict>
 </plist>
