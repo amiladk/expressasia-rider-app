@@ -17,7 +17,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { login } from '../services/api';
-import { saveRiderId } from '../services/storage';
+import { saveRiderId, saveRiderName } from '../services/storage';
 import Button from '../components/Button';
 import colors from '../constants/colors';
 
@@ -105,11 +105,19 @@ const LoginScreen = ({ navigation }) => {
 
       if (response.success) {
         // Extract rider ID from response
-        const riderId = response.data?.rider_id || response.data?.id;
+        const riderId = response.data?.data?.rider_id || response.data?.rider_id || response.data?.id;
 
         if (riderId) {
           // Save rider ID to storage
           await saveRiderId(riderId);
+        }
+
+        // Extract rider name from response
+        const riderName = response.data?.data?.name || response.data?.name;
+
+        if (riderName) {
+          // Save rider ID to storage
+          await saveRiderName(riderName);
         }
 
         // Show success message
@@ -162,8 +170,8 @@ const LoginScreen = ({ navigation }) => {
           <View style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-              <Text style={styles.title}>Express Rider</Text>
-              <Text style={styles.subtitle}>GPS Tracking System</Text>
+              <Text style={styles.title}>Express Asia</Text>
+              <Text style={styles.subtitle}>Rider Management</Text>
             </View>
 
             {/* Login Form */}
@@ -238,7 +246,7 @@ const LoginScreen = ({ navigation }) => {
             {/* Footer */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>
-                Express Rider v1.0.0
+                Express Asia Rider v1.0.0
               </Text>
             </View>
           </View>

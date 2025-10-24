@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const STORAGE_KEYS = {
   AUTH_TOKEN: '@express_rider:auth_token',
   RIDER_ID: '@express_rider:rider_id',
+  RIDER_NAME: '@express_rider:rider_name',
   TRIP_DATA: '@express_rider:trip_data',
   COORDINATES: '@express_rider:coordinates',
 };
@@ -97,6 +98,39 @@ export const getRiderId = async () => {
     return riderId;
   } catch (error) {
     console.error('Error retrieving rider ID:', error);
+    return null;
+  }
+};
+
+/**
+ * Save rider Name
+ * @param {string} name - Rider Name
+ * @returns {Promise<boolean>} Success status
+ */
+export const saveRiderName = async (name) => {
+  try {
+    if (!name && name !== 0) {
+      console.warn('No rider Name provided to saveRiderName');
+      return false;
+    }
+    await AsyncStorage.setItem(STORAGE_KEYS.RIDER_NAME, String(name));
+    return true;
+  } catch (error) {
+    console.error('Error saving rider Name:', error);
+    return false;
+  }
+};
+
+/**
+ * Retrieve rider ID
+ * @returns {Promise<string|null>} Rider ID or null
+ */
+export const getRiderName = async () => {
+  try {
+    const riderName = await AsyncStorage.getItem(STORAGE_KEYS.RIDER_NAME);
+    return riderName;
+  } catch (error) {
+    console.error('Error retrieving rider Name:', error);
     return null;
   }
 };
@@ -276,6 +310,8 @@ export default {
   // Rider
   saveRiderId,
   getRiderId,
+  saveRiderName,
+  getRiderName,
   
   // Trip
   saveTripData,

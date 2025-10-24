@@ -15,46 +15,25 @@ import colors from '../constants/colors';
 import { formatDate, formatTime, getDuration, formatDuration } from '../utils/dateFormatter';
 
 /**
- * Format date to readable string
- * @param {string|Date} date - Date to format
- * @returns {string} Formatted date string
- */
-// const formatDate = (date) => {
-//   try {
-//     const dateObj = typeof date === 'string' ? new Date(date) : date;
-    
-//     const options = {
-//       year: 'numeric',
-//       month: 'short',
-//       day: 'numeric',
-//     };
-    
-//     return dateObj.toLocaleDateString('en-US', options);
-//   } catch (error) {
-//     return 'Invalid Date';
-//   }
-// };
-
-/**
  * Format time to 12-hour format with AM/PM
  * @param {string|Date} time - Time to format
  * @returns {string} Formatted time string
  */
-const formatTime = (time) => {
-  try {
-    const timeObj = typeof time === 'string' ? new Date(time) : time;
+// const formatTime = (time) => {
+//   try {
+//     const timeObj = typeof time === 'string' ? new Date(time) : time;
     
-    const options = {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    };
+//     const options = {
+//       hour: 'numeric',
+//       minute: '2-digit',
+//       hour12: true,
+//     };
     
-    return timeObj.toLocaleTimeString('en-US', options);
-  } catch (error) {
-    return '--:--';
-  }
-};
+//     return timeObj.toLocaleTimeString('en-US', options);
+//   } catch (error) {
+//     return '--:--';
+//   }
+// };
 
 /**
  * Calculate duration between two times

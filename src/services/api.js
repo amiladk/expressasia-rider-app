@@ -125,8 +125,9 @@ export const login = async (username, password) => {
     });
 
     // Save auth token if provided in response
-    if (response.data?.token) {
-      await saveAuthToken(response.data.token);
+    const token = response.data?.data?.token || response.data?.token;
+    if (token) {
+      await saveAuthToken(token);
     }
 
     return {

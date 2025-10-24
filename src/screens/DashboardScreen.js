@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { logout } from '../services/api';
-import { getRiderId, getTripData, clearAllData } from '../services/storage';
+import { getRiderId, getRiderName, getTripData, clearAllData } from '../services/storage';
 import Button from '../components/Button';
 import colors from '../constants/colors';
 
@@ -77,8 +77,12 @@ const DashboardScreen = ({ navigation }) => {
       
       if (storedRiderId) {
         setRiderId(storedRiderId);
-        // You can fetch rider name from API or storage here
-        setRiderName(`Rider ${storedRiderId}`);
+      }
+
+      // Get rider Name from storage
+      const storedRiderName = await getRiderName();
+      if (storedRiderName) {
+        setRiderName(`${storedRiderName}`);
       }
 
       // Check for active trip

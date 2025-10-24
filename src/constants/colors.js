@@ -5,7 +5,7 @@
 
 const colors = {
   // Primary Colors
-  primary: '#2563eb', // Blue
+  primary: '#321b76', // Purple
   secondary: '#10b981', // Green
   
   // Status Colors
