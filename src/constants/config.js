@@ -4,7 +4,8 @@
  */
 
 // API Configuration
-export const API_BASE_URL = 'https://express-rider.expressasia.lk/api';
+// export const API_BASE_URL = 'https://express-rider.expressasia.lk/api/v1';
+export const API_BASE_URL = 'https://express-rider.expressasia.lk/api/v1';
 
 // GPS Tracking Configuration
 export const GPS_TRACKING_INTERVAL = 60000; // 1 minute in milliseconds

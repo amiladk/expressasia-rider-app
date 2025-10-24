@@ -19,21 +19,21 @@ import { formatDate, formatTime, getDuration, formatDuration } from '../utils/da
  * @param {string|Date} date - Date to format
  * @returns {string} Formatted date string
  */
-const formatDate = (date) => {
-  try {
-    const dateObj = typeof date === 'string' ? new Date(date) : date;
+// const formatDate = (date) => {
+//   try {
+//     const dateObj = typeof date === 'string' ? new Date(date) : date;
     
-    const options = {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    };
+//     const options = {
+//       year: 'numeric',
+//       month: 'short',
+//       day: 'numeric',
+//     };
     
-    return dateObj.toLocaleDateString('en-US', options);
-  } catch (error) {
-    return 'Invalid Date';
-  }
-};
+//     return dateObj.toLocaleDateString('en-US', options);
+//   } catch (error) {
+//     return 'Invalid Date';
+//   }
+// };
 
 /**
  * Format time to 12-hour format with AM/PM

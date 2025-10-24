@@ -119,7 +119,7 @@ apiClient.interceptors.response.use(
  */
 export const login = async (username, password) => {
   try {
-    const response = await apiClient.post('/main/login', {
+    const response = await apiClient.post('/auth/login', {
       username,
       password,
     });
@@ -154,7 +154,7 @@ export const login = async (username, password) => {
  */
 export const startTrip = async (riderId) => {
   try {
-    const response = await apiClient.post('/ajax/start-trip', {
+    const response = await apiClient.post('/trips/start', {
       rider_id: riderId,
     });
 
@@ -185,7 +185,7 @@ export const startTrip = async (riderId) => {
  */
 export const endTrip = async (tripData) => {
   try {
-    const response = await apiClient.post('/ajax/end-trip', {
+    const response = await apiClient.post('/trips/end', {
       trip_id: tripData.trip_id,
       rider_id: tripData.rider_id,
       start_time: tripData.start_time,
@@ -215,7 +215,7 @@ export const endTrip = async (tripData) => {
  */
 export const getTripHistory = async (riderId) => {
   try {
-    const response = await apiClient.get(`/ajax/trip-history/${riderId}`);
+    const response = await apiClient.get(`/trips/history/${riderId}`);
 
     return {
       success: true,
@@ -239,7 +239,7 @@ export const getTripHistory = async (riderId) => {
  */
 export const syncCoordinates = async (tripId, coordinates) => {
   try {
-    const response = await apiClient.post('/ajax/sync-coordinates', {
+    const response = await apiClient.post('/trips/sync-coordinates', {
       trip_id: tripId,
       coordinates,
     });

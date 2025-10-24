@@ -1,9 +1,11 @@
 /**
  * GPS Service
- * Background GPS tracking service using @mauron85/react-native-background-geolocation
+ * Background GPS tracking using react-native-geolocation-service + react-native-background-actions
  */
 
-import BackgroundGeolocation from '@mauron85/react-native-background-geolocation';
+import Geolocation from 'react-native-geolocation-service';
+import BackgroundService from 'react-native-background-actions';
+import { Platform, PermissionsAndroid } from 'react-native';
 import { CONFIG } from '../constants/config';
 import { calculateTotalDistance } from './haversine';
 
@@ -16,10 +18,12 @@ class GPSService {
     this.isInitialized = false;
     this.isTracking = false;
     this.locationCallback = null;
+    this.watchId = null;
+    this.backgroundTaskRunning = false;
   }
 
   /**
-   * Initialize GPS service with configuration
+   * Initialize GPS service
    * @returns {Promise<boolean>} Initialization success status
    */
   initialize = async () => {
@@ -31,37 +35,13 @@ class GPSService {
     try {
       console.log('Initializing GPS Service...');
       
-      // Configure BackgroundGeolocation
-      BackgroundGeolocation.configure({
-        // Accuracy settings
-        desiredAccuracy: BackgroundGeolocation.HIGH_ACCURACY,
-        stationaryRadius: CONFIG.tracking.minDistance, // 10 meters
-        distanceFilter: CONFIG.tracking.minDistance, // 10 meters
-        
-        // Location provider (best for Android battery optimization)
-        locationProvider: BackgroundGeolocation.ACTIVITY_PROVIDER,
-        
-        // Update intervals
-        interval: CONFIG.tracking.interval, // 60000ms = 1 minute
-        fastestInterval: 30000, // 30 seconds
-        activitiesInterval: 60000, // 1 minute
-        
-        // Background behavior
-        stopOnTerminate: false, // Continue after app termination
-        startOnBoot: false, // Don't auto-start on boot
-        
-        // Foreground service (Android)
-        startForeground: true,
-        notificationTitle: 'Delivery Trip Active',
-        notificationText: 'Tracking your delivery route',
-        notificationIconColor: '#2563eb',
-        
-        // Debug settings
-        debug: false, // Set to true for development
-        
-        // Other settings
-        pauseLocationUpdates: false,
-      });
+      // Request permissions
+      const hasPermission = await this.requestPermissions();
+      
+      if (!hasPermission) {
+        console.error('Location permissions not granted');
+        return false;
+      }
 
       this.isInitialized = true;
       console.log('GPS Service initialized successfully');
@@ -71,6 +51,119 @@ class GPSService {
       return false;
     }
   };
+
+  /**
+   * Request location permissions
+   * @returns {Promise<boolean>} Permission granted status
+   */
+  requestPermissions = async () => {
+    try {
+      if (Platform.OS === 'ios') {
+        // Request iOS permissions
+        const auth = await Geolocation.requestAuthorization('always');
+        return auth === 'granted' || auth === 'whenInUse';
+      }
+
+      if (Platform.OS === 'android') {
+        // Request Android permissions
+        const granted = await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
+        ]);
+
+        const fineLocation =
+          granted[PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION] ===
+          PermissionsAndroid.RESULTS.GRANTED;
+
+        const coarseLocation =
+          granted[PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION] ===
+          PermissionsAndroid.RESULTS.GRANTED;
+
+        // Request background location for Android 10+
+        if (Platform.Version >= 29) {
+          const bgGranted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION
+          );
+          
+          if (bgGranted !== PermissionsAndroid.RESULTS.GRANTED) {
+            console.warn('Background location permission not granted');
+          }
+        }
+
+        return fineLocation || coarseLocation;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Error requesting permissions:', error);
+      return false;
+    }
+  };
+
+  /**
+   * Background task function
+   * Runs continuously in the background
+   */
+  backgroundTask = async (taskDataArguments) => {
+    const { delay } = taskDataArguments;
+
+    await new Promise(async (resolve) => {
+      // Keep the task running
+      while (BackgroundService.isRunning()) {
+        // Get current location
+        this.getCurrentLocationInBackground();
+        
+        // Wait for the configured interval
+        await this.sleep(delay);
+      }
+    });
+  };
+
+  /**
+   * Get current location in background
+   */
+  getCurrentLocationInBackground = () => {
+    Geolocation.getCurrentPosition(
+      (position) => {
+        const location = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          altitude: position.coords.altitude,
+          speed: position.coords.speed,
+          timestamp: position.timestamp,
+        };
+
+        console.log('Background location update:', location);
+
+        // Call callback if set
+        if (this.locationCallback) {
+          this.locationCallback(location);
+        }
+      },
+      (error) => {
+        console.error('Background location error:', error);
+      },
+      {
+        accuracy: {
+          android: 'high',
+          ios: 'bestForNavigation',
+        },
+        enableHighAccuracy: true,
+        timeout: 30000,
+        maximumAge: 10000,
+        distanceFilter: CONFIG.tracking.minDistance,
+        forceRequestLocation: true,
+        forceLocationManager: Platform.OS === 'android',
+        showLocationDialog: true,
+      }
+    );
+  };
+
+  /**
+   * Sleep helper function
+   */
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   /**
    * Start GPS tracking
@@ -93,44 +186,63 @@ class GPSService {
       // Store callback
       this.locationCallback = onLocationUpdate;
 
-      // Set up location listener
-      BackgroundGeolocation.on('location', (location) => {
-        console.log('Location received:', location);
-        
-        // Format location data
-        const formattedLocation = {
-          latitude: location.latitude,
-          longitude: location.longitude,
-          accuracy: location.accuracy,
-          altitude: location.altitude,
-          speed: location.speed,
-          timestamp: location.time,
-        };
+      // Start foreground location watching
+      this.watchId = Geolocation.watchPosition(
+        (position) => {
+          const location = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            altitude: position.coords.altitude,
+            speed: position.coords.speed,
+            timestamp: position.timestamp,
+          };
 
-        // Call callback with location
-        if (this.locationCallback) {
-          this.locationCallback(formattedLocation);
+          console.log('Foreground location update:', location);
+
+          // Call callback
+          if (this.locationCallback) {
+            this.locationCallback(location);
+          }
+        },
+        (error) => {
+          console.error('Foreground location error:', error);
+        },
+        {
+          accuracy: {
+            android: 'high',
+            ios: 'bestForNavigation',
+          },
+          enableHighAccuracy: true,
+          distanceFilter: CONFIG.tracking.minDistance,
+          interval: CONFIG.tracking.interval,
+          fastestInterval: 30000,
+          forceRequestLocation: true,
+          forceLocationManager: Platform.OS === 'android',
+          showLocationDialog: true,
+          useSignificantChanges: false,
         }
-      });
+      );
 
-      // Set up error listener
-      BackgroundGeolocation.on('error', (error) => {
-        console.error('GPS tracking error:', error);
-      });
+      // Start background service
+      const options = {
+        taskName: 'Express Rider GPS Tracking',
+        taskTitle: 'Delivery Trip Active',
+        taskDesc: 'Tracking your delivery route',
+        taskIcon: {
+          name: 'ic_launcher',
+          type: 'mipmap',
+        },
+        color: '#2563eb',
+        linkingURI: 'expressrider://trip',
+        parameters: {
+          delay: CONFIG.tracking.interval,
+        },
+      };
 
-      // Set up stationary listener
-      BackgroundGeolocation.on('stationary', (stationaryLocation) => {
-        console.log('Device is stationary:', stationaryLocation);
-      });
+      await BackgroundService.start(this.backgroundTask, options);
+      this.backgroundTaskRunning = true;
 
-      // Set up activity listener
-      BackgroundGeolocation.on('activity', (activity) => {
-        console.log('Activity detected:', activity);
-      });
-
-      // Start tracking
-      BackgroundGeolocation.start();
-      
       this.isTracking = true;
       console.log('GPS tracking started successfully');
       return true;
@@ -151,11 +263,17 @@ class GPSService {
         return true;
       }
 
-      // Stop tracking
-      BackgroundGeolocation.stop();
+      // Stop foreground location watching
+      if (this.watchId !== null) {
+        Geolocation.clearWatch(this.watchId);
+        this.watchId = null;
+      }
 
-      // Remove all listeners
-      BackgroundGeolocation.removeAllListeners();
+      // Stop background service
+      if (this.backgroundTaskRunning) {
+        await BackgroundService.stop();
+        this.backgroundTaskRunning = false;
+      }
 
       // Clear callback
       this.locationCallback = null;
@@ -175,28 +293,31 @@ class GPSService {
    */
   getCurrentLocation = () => {
     return new Promise((resolve, reject) => {
-      BackgroundGeolocation.getCurrentLocation(
-        (location) => {
-          // Success callback
-          const formattedLocation = {
-            latitude: location.latitude,
-            longitude: location.longitude,
-            accuracy: location.accuracy,
-            altitude: location.altitude,
-            speed: location.speed,
-            timestamp: location.time,
+      Geolocation.getCurrentPosition(
+        (position) => {
+          const location = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            altitude: position.coords.altitude,
+            speed: position.coords.speed,
+            timestamp: position.timestamp,
           };
-          resolve(formattedLocation);
+          resolve(location);
         },
         (error) => {
-          // Error callback
           console.error('Error getting current location:', error);
           reject(error);
         },
         {
-          timeout: 30000, // 30 seconds
-          maximumAge: 10000, // 10 seconds
+          accuracy: {
+            android: 'high',
+            ios: 'bestForNavigation',
+          },
           enableHighAccuracy: true,
+          timeout: 30000,
+          maximumAge: 10000,
+          forceRequestLocation: true,
         }
       );
     });
@@ -224,23 +345,19 @@ class GPSService {
    * Check location services status
    * @returns {Promise<Object>} Location services status
    */
-  checkLocationServices = () => {
-    return new Promise((resolve, reject) => {
-      BackgroundGeolocation.checkStatus(
-        (status) => {
-          resolve({
-            isRunning: status.isRunning,
-            hasPermissions: status.authorization === BackgroundGeolocation.AUTHORIZED,
-            locationServicesEnabled: status.locationServicesEnabled,
-            authorization: status.authorization,
-          });
-        },
-        (error) => {
-          console.error('Error checking location services:', error);
-          reject(error);
-        }
-      );
-    });
+  checkLocationServices = async () => {
+    try {
+      // This is a simplified check
+      // react-native-geolocation-service doesn't have a built-in status check
+      return {
+        isRunning: this.isTracking,
+        hasPermissions: this.isInitialized,
+        locationServicesEnabled: true, // Assume enabled
+      };
+    } catch (error) {
+      console.error('Error checking location services:', error);
+      throw error;
+    }
   };
 
   /**
@@ -252,28 +369,11 @@ class GPSService {
   };
 
   /**
-   * Request location permissions (helper method)
-   * Note: Actual permission handling should be done in the component
-   * This is just a utility to check authorization
+   * Check if background service is running
+   * @returns {boolean} Background service status
    */
-  checkAuthorization = () => {
-    return new Promise((resolve, reject) => {
-      BackgroundGeolocation.checkStatus(
-        (status) => {
-          const authorized = 
-            status.authorization === BackgroundGeolocation.AUTHORIZED ||
-            status.authorization === BackgroundGeolocation.AUTHORIZED_FOREGROUND;
-          
-          resolve({
-            authorized,
-            authorizationStatus: status.authorization,
-          });
-        },
-        (error) => {
-          reject(error);
-        }
-      );
-    });
+  isBackgroundServiceRunning = () => {
+    return BackgroundService.isRunning();
   };
 }
 

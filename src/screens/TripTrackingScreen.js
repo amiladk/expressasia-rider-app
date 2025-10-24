@@ -15,6 +15,7 @@ import {
   AppState,
 } from 'react-native';
 import gpsService from '../services/gpsService';
+import Geolocation from 'react-native-geolocation-service';
 import { startTrip, endTrip } from '../services/api';
 import {
   saveTripData,
@@ -49,22 +50,39 @@ const formatDuration = (seconds) => {
  */
 const requestLocationPermission = async () => {
   if (Platform.OS === 'ios') {
-    // iOS permissions are handled in Info.plist
-    return true;
+    const auth = await Geolocation.requestAuthorization('always');
+    return auth === 'granted' || auth === 'whenInUse';
   }
 
   try {
     const granted = await PermissionsAndroid.requestMultiple([
       PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-      PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
+      PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
     ]);
 
-    return (
+    const fineLocation =
       granted['android.permission.ACCESS_FINE_LOCATION'] ===
-        PermissionsAndroid.RESULTS.GRANTED &&
-      granted['android.permission.ACCESS_BACKGROUND_LOCATION'] ===
-        PermissionsAndroid.RESULTS.GRANTED
-    );
+      PermissionsAndroid.RESULTS.GRANTED;
+
+    const coarseLocation =
+      granted['android.permission.ACCESS_COARSE_LOCATION'] ===
+      PermissionsAndroid.RESULTS.GRANTED;
+
+    // Request background location for Android 10+
+    if (Platform.Version >= 29) {
+      const bgGranted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION
+      );
+      
+      if (bgGranted !== PermissionsAndroid.RESULTS.GRANTED) {
+        Alert.alert(
+          'Background Location',
+          'For best results, please enable "Allow all the time" location access in Settings.'
+        );
+      }
+    }
+
+    return fineLocation || coarseLocation;
   } catch (err) {
     console.error('Permission request error:', err);
     return false;
