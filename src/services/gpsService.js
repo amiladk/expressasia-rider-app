@@ -241,7 +241,8 @@ class GPSService {
       // Progressive timeout increase
       const timeout = retryCount === 0 ? 20000 : 30000 + (retryCount * 15000);
       const maximumAge = retryCount === 0 ? 5000 : 30000 + (retryCount * 30000);
-      const enableHighAccuracy = retryCount < 2; // Only high accuracy for first 2 attempts
+      // const enableHighAccuracy = retryCount < 2; // Only high accuracy for first 2 attempts
+      const enableHighAccuracy = false;
 
       console.log('Settings:', {
         timeout: timeout / 1000 + 's',
@@ -254,11 +255,11 @@ class GPSService {
           const location = {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            altitude: position.coords.altitude,
-            speed: position.coords.speed,
+            accuracy: position.coords.accuracy || null,
+            altitude: position.coords.altitude || null,
+            speed: position.coords.speed || 0,
             heading: position.coords.heading,
-            timestamp: position.timestamp,
+            timestamp: Math.floor(position.timestamp || Date.now()),
           };
 
           console.log('✓ Location obtained:', {

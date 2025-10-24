@@ -272,7 +272,7 @@ const DashboardScreen = ({ navigation }) => {
           </View>
 
           {/* Quick Stats (Optional - can be expanded later) */}
-          <View style={styles.statsContainer}>
+          {/* <View style={styles.statsContainer}>
             <Text style={styles.statsTitle}>Quick Stats</Text>
             <View style={styles.statsGrid}>
               <View style={styles.statCard}>
@@ -284,7 +284,7 @@ const DashboardScreen = ({ navigation }) => {
                 <Text style={styles.statLabel}>Total Distance</Text>
               </View>
             </View>
-          </View>
+          </View> */}
 
           {/* Logout Button */}
           <View style={styles.logoutContainer}>

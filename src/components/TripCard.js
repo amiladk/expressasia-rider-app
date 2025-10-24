@@ -141,8 +141,8 @@ const TripCard = ({ trip, onPress }) => {
       {/* Header with Date and Status */}
       <View style={styles.header}>
         <Text style={styles.date}>{formattedDate}</Text>
-        <Text style={styles.time}>{formattedStartTime} - {formattedEndTime}</Text>
-        <Text style={styles.duration}>{duration}</Text>
+        {/* <Text style={styles.time}>{formattedStartTime} - {formattedEndTime}</Text>
+        <Text style={styles.duration}>{duration}</Text> */}
         <View
           style={[
             styles.statusBadge,

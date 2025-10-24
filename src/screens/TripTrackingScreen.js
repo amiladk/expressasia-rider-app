@@ -173,7 +173,7 @@ const TripTrackingScreen = ({ navigation }) => {
           throw new Error(response.message || 'Failed to start trip');
         }
 
-        const newTripId = response.data?.trip_id || response.data?.id;
+        const newTripId = response.data?.data?.trip_id || response.data?.trip_id || response.data?.data?.id;
         const tripStartTime = new Date();
 
         setTripId(newTripId);
@@ -231,9 +231,10 @@ const TripTrackingScreen = ({ navigation }) => {
       const coord = {
         latitude: location.latitude,
         longitude: location.longitude,
-        accuracy: location.accuracy,
-        timestamp: location.timestamp || Date.now(),
+        accuracy: location.accuracy || null,
+        altitude: location.altitude || null,
         speed: location.speed || 0,
+        timestamp: Math.floor(location.timestamp || Date.now()),
       };
 
       // Update speed (convert m/s to km/h)
@@ -323,6 +324,15 @@ const TripTrackingScreen = ({ navigation }) => {
 
       const endTime = new Date();
 
+      const formattedCoordinates = coordinates.map(coord => ({
+        latitude: coord.latitude,
+        longitude: coord.longitude,
+        accuracy: coord.accuracy || null,
+        altitude: coord.altitude || null,
+        speed: coord.speed || 0,
+        timestamp: Math.floor(coord.timestamp || Date.now()),
+      }));
+
       // Prepare trip data
       const tripData = {
         trip_id: tripId,
@@ -330,7 +340,7 @@ const TripTrackingScreen = ({ navigation }) => {
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
         total_distance: distance,
-        coordinates: coordinates,
+        coordinates: formattedCoordinates,
       };
 
       // Call end trip API
