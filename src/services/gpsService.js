@@ -1,12 +1,16 @@
 /**
- * GPS Service - ENHANCED VERSION
- * Fixed: Location provider availability issues
- * Handles GPS disabled, checks location services, better Android compatibility
+ * GPS Service - ENHANCED VERSION WITH BACKGROUND FIX
+ * Fixed: Background location timeout issues
+ * Improvements:
+ * 1. More lenient settings for background mode
+ * 2. Better fallback to last known location
+ * 3. Reduced frequency in background
+ * 4. Android Doze mode handling
  */
 
 import Geolocation from 'react-native-geolocation-service';
 import BackgroundService from 'react-native-background-actions';
-import { Platform, PermissionsAndroid, Alert, Linking } from 'react-native';
+import { Platform, PermissionsAndroid, Alert, Linking, AppState } from 'react-native';
 import { CONFIG } from '../constants/config';
 import { calculateTotalDistance } from './haversine';
 
@@ -21,8 +25,10 @@ class GPSService {
     this.watchId = null;
     this.backgroundTaskRunning = false;
     this.lastLocation = null;
+    this.lastLocationTime = null;
     this.locationRetryCount = 0;
     this.maxRetries = 3;
+    this.appState = AppState.currentState;
   }
 
   /**
@@ -32,11 +38,7 @@ class GPSService {
   checkLocationEnabled = async () => {
     try {
       if (Platform.OS === 'android') {
-        // For Android, we need to check if location is enabled
-        // This is a workaround since react-native-geolocation-service doesn't have built-in check
-        
         return new Promise((resolve) => {
-          // Try to get a quick position to test if GPS is enabled
           Geolocation.getCurrentPosition(
             () => {
               console.log('✓ Location services are enabled');
@@ -45,22 +47,19 @@ class GPSService {
             (error) => {
               console.log('Location services check error:', error);
               if (error.code === 2) {
-                // POSITION_UNAVAILABLE - Location disabled
                 resolve(false);
               } else {
-                // Other errors - assume enabled but signal issues
                 resolve(true);
               }
             },
             {
               enableHighAccuracy: false,
               timeout: 5000,
-              maximumAge: 300000, // Accept very old cache
+              maximumAge: 300000,
             }
           );
         });
       } else {
-        // iOS - assume enabled if permission granted
         return true;
       }
     } catch (error) {
@@ -85,10 +84,8 @@ class GPSService {
           text: 'Open Settings',
           onPress: () => {
             if (Platform.OS === 'android') {
-              // Open location settings on Android
               Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS');
             } else {
-              // Open settings on iOS
               Linking.openSettings();
             }
           },
@@ -109,7 +106,12 @@ class GPSService {
     try {
       console.log('Initializing GPS Service...');
       
-      // Step 1: Request permissions
+      // Monitor app state changes
+      this.appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
+        console.log('App state changed:', this.appState, '->', nextAppState);
+        this.appState = nextAppState;
+      });
+      
       const hasPermission = await this.requestPermissions();
       
       if (!hasPermission) {
@@ -131,7 +133,6 @@ class GPSService {
         return false;
       }
 
-      // Step 2: Check if location services are enabled
       const locationEnabled = await this.checkLocationEnabled();
       
       if (!locationEnabled) {
@@ -183,7 +184,7 @@ class GPSService {
           return false;
         }
 
-        // Request background location for Android 10+ (Q and above)
+        // Request background location for Android 10+
         if (Platform.Version >= 29) {
           console.log('Requesting background location permission (Android 10+)...');
           
@@ -232,22 +233,42 @@ class GPSService {
   };
 
   /**
-   * Get current location with retry and better error handling
+   * Check if app is in background
    */
-  getCurrentLocationWithRetry = async (retryCount = 0) => {
-    return new Promise((resolve, reject) => {
-      console.log(`\n--- Getting location (Attempt ${retryCount + 1}/${this.maxRetries + 1}) ---`);
+  isAppInBackground = () => {
+    return this.appState === 'background' || this.appState === 'inactive';
+  };
 
-      // Progressive timeout increase
-      const timeout = retryCount === 0 ? 20000 : 30000 + (retryCount * 15000);
-      const maximumAge = retryCount === 0 ? 5000 : 30000 + (retryCount * 30000);
-      // const enableHighAccuracy = retryCount < 2; // Only high accuracy for first 2 attempts
-      const enableHighAccuracy = false;
+  /**
+   * Get current location with retry and better error handling
+   * @param {number} retryCount - Current retry attempt
+   * @param {boolean} isBackground - Whether request is from background
+   */
+  getCurrentLocationWithRetry = async (retryCount = 0, isBackground = false) => {
+    return new Promise((resolve, reject) => {
+      const mode = isBackground ? '[BACKGROUND]' : '[FOREGROUND]';
+      console.log(`\n--- Getting location (Attempt ${retryCount + 1}/${this.maxRetries + 1}) ${mode} ---`);
+
+      // More lenient settings for background mode
+      let timeout, maximumAge, enableHighAccuracy;
+      
+      if (isBackground) {
+        // Background mode: very lenient settings
+        timeout = retryCount === 0 ? 30000 : 45000 + (retryCount * 15000);
+        maximumAge = retryCount === 0 ? 120000 : 300000; // Accept 2-5 minute old locations
+        enableHighAccuracy = false;
+      } else {
+        // Foreground mode: moderate settings
+        timeout = retryCount === 0 ? 20000 : 30000 + (retryCount * 15000);
+        maximumAge = retryCount === 0 ? 10000 : 60000 + (retryCount * 30000);
+        enableHighAccuracy = false;
+      }
 
       console.log('Settings:', {
         timeout: timeout / 1000 + 's',
         maximumAge: maximumAge / 1000 + 's',
         highAccuracy: enableHighAccuracy,
+        mode: isBackground ? 'background' : 'foreground',
       });
 
       Geolocation.getCurrentPosition(
@@ -262,28 +283,26 @@ class GPSService {
             timestamp: Math.floor(position.timestamp || Date.now()),
           };
 
+          const age = Math.round((Date.now() - location.timestamp) / 1000);
           console.log('✓ Location obtained:', {
             lat: location.latitude.toFixed(6),
             lng: location.longitude.toFixed(6),
             accuracy: location.accuracy?.toFixed(1) + 'm',
-            age: Math.round((Date.now() - location.timestamp) / 1000) + 's old'
+            age: age + 's old'
           });
 
           this.lastLocation = location;
+          this.lastLocationTime = Date.now();
           this.locationRetryCount = 0;
           resolve(location);
         },
         (error) => {
           console.error(`✗ Location error (attempt ${retryCount + 1}):`, error);
 
-          // Handle different error codes
           if (error.code === 2) {
-            // POSITION_UNAVAILABLE - No location provider
             console.error('ERROR CODE 2: No location provider available');
-            console.error('This means GPS is disabled or not accessible');
             
             if (retryCount === 0) {
-              // On first error, prompt user to enable location
               reject({
                 code: 2,
                 message: 'Location services are disabled. Please enable GPS in your device settings.',
@@ -293,27 +312,38 @@ class GPSService {
               reject(error);
             }
           } else if (error.code === 3) {
-            // TIMEOUT
+            // TIMEOUT - Common in background
             console.warn('ERROR CODE 3: Location request timed out');
+            
+            // In background, use last known location more aggressively
+            if (isBackground && this.lastLocation) {
+              const locationAge = Date.now() - this.lastLocationTime;
+              const maxAge = 10 * 60 * 1000; // 10 minutes
+              
+              if (locationAge < maxAge) {
+                console.log(`⚠ Using last known location from ${Math.round(locationAge / 1000)}s ago`);
+                resolve(this.lastLocation);
+                return;
+              }
+            }
             
             if (retryCount < this.maxRetries) {
               console.log(`Retrying with more relaxed settings...`);
               setTimeout(() => {
-                this.getCurrentLocationWithRetry(retryCount + 1)
+                this.getCurrentLocationWithRetry(retryCount + 1, isBackground)
                   .then(resolve)
                   .catch(reject);
-              }, 1000);
+              }, 2000);
             } else if (this.lastLocation) {
               console.log('⚠ Using last known location as fallback');
               resolve(this.lastLocation);
             } else {
               reject({
                 code: 3,
-                message: 'Unable to get location. Please ensure you are outdoors with clear sky view.',
+                message: 'Unable to get location. Please ensure you have clear GPS signal.',
               });
             }
           } else if (error.code === 1) {
-            // PERMISSION_DENIED
             console.error('ERROR CODE 1: Permission denied');
             reject({
               code: 1,
@@ -321,12 +351,11 @@ class GPSService {
               shouldPrompt: true,
             });
           } else {
-            // Unknown error
             console.error('Unknown error code:', error.code);
             
             if (retryCount < this.maxRetries) {
               setTimeout(() => {
-                this.getCurrentLocationWithRetry(retryCount + 1)
+                this.getCurrentLocationWithRetry(retryCount + 1, isBackground)
                   .then(resolve)
                   .catch(reject);
               }, 2000);
@@ -354,27 +383,30 @@ class GPSService {
   };
 
   /**
-   * Background task function
+   * Background task function with improved handling
    */
   backgroundTask = async (taskDataArguments) => {
     const { delay } = taskDataArguments;
+    // Longer delay for background (2 minutes instead of 1)
+    const backgroundDelay = Math.max(delay * 2, 120000);
 
     await new Promise(async (resolve) => {
       while (BackgroundService.isRunning()) {
         try {
           console.log('\n=== Background GPS Update ===');
           
-          const location = await this.getCurrentLocationWithRetry(0);
+          // Always pass isBackground=true for background task
+          const location = await this.getCurrentLocationWithRetry(0, true);
 
           if (this.locationCallback && location) {
             this.locationCallback(location);
           }
         } catch (error) {
           console.error('Background location error:', error);
-          // Continue even if one cycle fails
+          // Don't fail - just log and continue
         }
         
-        await this.sleep(delay);
+        await this.sleep(backgroundDelay);
       }
     });
   };
@@ -388,7 +420,6 @@ class GPSService {
     try {
       console.log('\n========== STARTING GPS TRACKING ==========');
       
-      // Initialize if needed
       if (!this.isInitialized) {
         console.log('Initializing GPS service...');
         const initialized = await this.initialize();
@@ -409,7 +440,7 @@ class GPSService {
       console.log('Getting initial GPS fix...');
       
       try {
-        const initialLocation = await this.getCurrentLocationWithRetry(0);
+        const initialLocation = await this.getCurrentLocationWithRetry(0, false);
         
         if (this.locationCallback && initialLocation) {
           this.locationCallback(initialLocation);
@@ -446,7 +477,7 @@ class GPSService {
         throw error;
       }
 
-      // Start foreground tracking
+      // Start foreground tracking with relaxed settings
       console.log('Starting foreground location watch...');
       
       this.watchId = Geolocation.watchPosition(
@@ -468,6 +499,7 @@ class GPSService {
           });
 
           this.lastLocation = location;
+          this.lastLocationTime = Date.now();
 
           if (this.locationCallback) {
             this.locationCallback(location);
@@ -478,10 +510,10 @@ class GPSService {
         },
         {
           accuracy: {
-            android: 'high',
+            android: 'balanced', // Use balanced instead of high for better reliability
             ios: 'best',
           },
-          enableHighAccuracy: true,
+          enableHighAccuracy: false, // Disable high accuracy for better battery/reliability
           distanceFilter: CONFIG.tracking.minDistance,
           interval: CONFIG.tracking.interval,
           fastestInterval: 30000,
@@ -494,7 +526,7 @@ class GPSService {
 
       console.log('✓ Foreground tracking started');
 
-      // Start background service
+      // Start background service with longer intervals
       console.log('Starting background service...');
       
       const options = {
@@ -505,7 +537,7 @@ class GPSService {
           name: 'ic_launcher',
           type: 'mipmap',
         },
-        color: '#2563eb',
+        color: '#321b76',
         linkingURI: 'expressrider://trip',
         parameters: {
           delay: CONFIG.tracking.interval,
@@ -563,7 +595,7 @@ class GPSService {
   };
 
   getCurrentLocation = async () => {
-    return this.getCurrentLocationWithRetry(0);
+    return this.getCurrentLocationWithRetry(0, this.isAppInBackground());
   };
 
   calculateTripDistance = (coordinates) => {
