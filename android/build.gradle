@@ -20,3 +20,20 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        
+        // Add these for react-native-background-fetch
+        maven {
+            url "https://jitpack.io"
+        }
+        maven {
+            // Local libs from background-fetch
+            url "${rootProject.projectDir}/../node_modules/react-native-background-fetch/android/libs"
+        }
+    }
+}
